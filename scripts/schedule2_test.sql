@@ -131,21 +131,21 @@ SET DATA_PT = DATA_PATTERN(ARRAY_CONSTRUCT(
 -- Create dummy aggregation data target 1
 --
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_1 (
-	"DATA_PT" 								NUMBER         NOT NULL,
-	"DATA_DN" 								VARCHAR,
-	"DATA_DT" 								DATE           NOT NULL,
-  "DATA_HR" 								NUMBER,
-  "DATA_TS" 								TIMESTAMP_NTZ,
-	"DATA_I1" 								NUMBER         NOT NULL,
-	"DATA_I2" 								NUMBER,
-	"DATA_I3" 								NUMBER,
-	"DATA_A1" 								VARCHAR,
-	"DATA_A2" 								VARCHAR,
-	"DATA_A3" 								VARCHAR,
-	"VSUM_I1" 								NUMBER,
-	"VCNT_I2" 								NUMBER,
-	"VSUM_D1" 								FLOAT,
-	"VAVG_D2" 								FLOAT
+	"DATA_PT" 		NUMBER         NOT NULL,
+	"DATA_DN" 		VARCHAR,
+	"DATA_DT" 		DATE           NOT NULL,
+	"DATA_HR" 		NUMBER,
+	"DATA_TS" 		TIMESTAMP_NTZ,
+	"DATA_I1" 		NUMBER         NOT NULL,
+	"DATA_I2" 		NUMBER,
+	"DATA_I3" 		NUMBER,
+	"DATA_A1" 		VARCHAR,
+	"DATA_A2" 		VARCHAR,
+	"DATA_A3" 		VARCHAR,
+	"VSUM_I1" 		NUMBER,
+	"VCNT_I2" 		NUMBER,
+	"VSUM_D1" 		FLOAT,
+	"VAVG_D2" 		FLOAT
 );
 --
 -- Register the tagegt table 1
@@ -181,8 +181,8 @@ USING (
   	,'["DATA_PATTERN",
   		"DATA_NAME",
   		"DATA_DATE",
-      "DATA_HOUR",
-      "DATA_TIME",
+  		"DATA_HOUR",
+  		"DATA_TIME",
   		"DATA_I1",
   		"DATA_I2",
   		"DATA_I3",
@@ -193,9 +193,9 @@ USING (
   	-- group-by columns of target data and which source column is the match
   	,'["DATA_PT:DATA_PATTERN",
   		"DATA_DN:DATA_NAME",
-      "DATA_DT:DATA_DATE",
-      "DATA_HR:DATA_HOUR",
-      "DATA_TS:DATA_TIME",
+  		"DATA_DT:DATA_DATE",
+  		"DATA_HR:DATA_HOUR",
+  		"DATA_TS:DATA_TIME",
   		"DATA_I1:DATA_I1",
   		"DATA_I2:DATA_I2",
   		"DATA_I3:DATA_I3",
@@ -212,8 +212,8 @@ USING (
   	)
   ) S
 ON D.TARGET_TABLE = S.TARGET_TABLE
-WHEN MATCHED THEN UPDATE SET
-  TARGET_LABEL = S.TARGET_LABEL
+WHEN MATCHED THEN UPDATE SET ID = D.ID
+  ,TARGET_LABEL = S.TARGET_LABEL
   ,TARGET_TABLE = S.TARGET_TABLE
   ,BATCH_CONTROL_COLUMN = S.BATCH_CONTROL_COLUMN
   ,BATCH_CONTROL_SIZE = S.BATCH_CONTROL_SIZE
@@ -278,7 +278,7 @@ USING (
   SELECT 'Test: dummy aggregation target 1 source 1' SOURCE_LABEL
     	,$1 TARGET_TABLE
     	,$2 SOURCE_TABLE
-    	,true SOURCE_ENABLED
+    	,False SOURCE_ENABLED
     	,0 PATTERN_DEFAULT
     	,False PATTERN_FLEXIBLE
     	,DATEADD(MINUTE, ROUND(DATEDIFF(MINUTE, '2000-01-01',TO_TIMESTAMP_NTZ(CURRENT_TIMESTAMP()))/5)*5,'2000-01-01') DATA_AVAILABLETIME
@@ -341,6 +341,19 @@ VALUES (
 	,S.DATA_CHECKSCHEDULE
 	,S.TRANSFORMATION
 	)
+; 
+--
+-- Test new added source setting
+--
+-- CALL DATA_AGGREGATOR ('<target table>', '<test date>', <script only>, <disabled only>);
+CALL DATA_AGGREGATOR ('_TEST_DATA_TARGET_1', TO_VARCHAR(CURRENT_DATE()-1), 0, 1);
+--
+-- Exclude new added source from testing
+--
+UPDATE DATA_AGGREGATION_SOURCES
+SET SOURCE_ENABLED = NULL
+WHERE TARGET_TABLE = '_TEST_DATA_TARGET_1'
+AND SOURCE_TABLE IN ('_TEST_DATA_SOURCE_1')
 ;
 --
 -- Register the source data table
@@ -352,7 +365,7 @@ USING (
   SELECT 'Test: dummy aggregation target 1 source 2' SOURCE_LABEL
     	,$1 TARGET_TABLE
     	,$2 SOURCE_TABLE
-    	,true SOURCE_ENABLED
+    	,False SOURCE_ENABLED
     	,0 PATTERN_DEFAULT
     	,False PATTERN_FLEXIBLE
     	,DATEADD(MINUTE, ROUND(DATEDIFF(MINUTE, '2000-01-01',TO_TIMESTAMP_NTZ(CURRENT_TIMESTAMP()))/5)*5,'2000-01-01') DATA_AVAILABLETIME
@@ -417,6 +430,29 @@ VALUES (
 	)
 ;
 --
+-- Test new added source setting
+--
+-- CALL DATA_AGGREGATOR ('<target table>', '<test date>', <script only>, <disabled only>);
+CALL DATA_AGGREGATOR ('_TEST_DATA_TARGET_1', TO_VARCHAR(CURRENT_DATE()-1), 0, 1);
+--
+-- Exclude new added source from testing
+--
+UPDATE DATA_AGGREGATION_SOURCES
+SET SOURCE_ENABLED = NULL
+WHERE TARGET_TABLE = '_TEST_DATA_TARGET_1'
+AND SOURCE_TABLE IN ('_TEST_DATA_SOURCE_2')
+;
+--
+-- Enable all aggregation source
+--
+UPDATE DATA_AGGREGATION_SOURCES
+SET SOURCE_ENABLED = True
+WHERE TARGET_TABLE = '_TEST_DATA_TARGET_1'
+AND SOURCE_TABLE IN ( ''
+	,'_TEST_DATA_SOURCE_1'
+	,'_TEST_DATA_SOURCE_2'
+);
+--
 -- Populate summary data of one day
 --
 CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_1', '2020-01-07', 1);
@@ -436,21 +472,21 @@ order by 1 desc
 -- Create dummy aggregation data target 2
 --
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_2 (
-  "DATA_PT" 								NUMBER,
-	"DATA_DN" 								VARCHAR,
-  "DATA_DT" 								DATE          NOT NULL,
-  "DATA_HR" 								NUMBER,
-  "DATA_TS" 								TIMESTAMP_NTZ,
-	"DATA_I1" 								NUMBER         NOT NULL,
-	"DATA_I2" 								NUMBER,
-	"DATA_I3" 								NUMBER,
-	"DATA_A1" 								VARCHAR,
-	"DATA_A2" 								VARCHAR,
-	"DATA_A3" 								VARCHAR,
-	"VSUM_I1" 								NUMBER,
-	"VCNT_I2" 								NUMBER,
-	"VSUM_D1" 								FLOAT,
-	"VAVG_D2" 								FLOAT
+	"DATA_PT" 		NUMBER,
+	"DATA_DN" 		VARCHAR,
+	"DATA_DT" 		DATE 			NOT NULL,
+	"DATA_HR" 		NUMBER,
+	"DATA_TS" 		TIMESTAMP_NTZ,
+	"DATA_I1" 		NUMBER 			NOT NULL,
+	"DATA_I2" 		NUMBER,
+	"DATA_I3" 		NUMBER,
+	"DATA_A1" 		VARCHAR,
+	"DATA_A2" 		VARCHAR,
+	"DATA_A3" 		VARCHAR,
+	"VSUM_I1" 		NUMBER,
+	"VCNT_I2" 		NUMBER,
+	"VSUM_D1" 		FLOAT,
+	"VAVG_D2" 		FLOAT
 );
 --
 -- Register the tagegt table 1
@@ -485,9 +521,9 @@ USING (
   	-- all group-by columns in source data
   	,'["DATA_PATTERN",
   		"DATA_NAME",
-      "DATA_DATE",
-      "DATA_HOUR",
-      "DATA_TIME",
+  		"DATA_DATE",
+  		"DATA_HOUR",
+  		"DATA_TIME",
   		"DATA_I1",
   		"DATA_I2",
   		"DATA_I3",

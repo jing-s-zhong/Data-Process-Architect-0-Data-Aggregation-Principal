@@ -274,6 +274,134 @@ $$;
 -------------------------------------------------------
 --
 -- Aggregate generation stored procedues for indivual source
+-- DROP PROCEDURE DATA_AGGREGATOR(STRING, STRING, BOOLEAN, BOOLEAN);
+ALTER PROCEDURE IF EXISTS DATA_AGGREGATOR(STRING, STRING, BOOLEAN, BOOLEAN) RENAME TO _BKBY_&{ver}_DATA_AGGREGATOR;
+CREATE PROCEDURE  DATA_AGGREGATOR (
+	TARGET_TABLE VARCHAR, 
+	BATCH_TIMETAG VARCHAR, 
+	SCRIPT_ONLY BOOLEAN, 
+	NULL_ENABLED BOOLEAN
+	)
+RETURNS STRING
+LANGUAGE JAVASCRIPT STRICT
+AS
+$$
+try {
+	var sqlScript = '', sourceTitle = '';
+
+	var sourceQuery = `SELECT 
+		  d.TARGET_TABLE, 
+		  d.BATCH_CONTROL_COLUMN,
+		  d.BATCH_CONTROL_SIZE,
+		  d.BATCH_CONTROL_NEXT,
+		  d.PATTERN_COLUMNS,
+		  d.GROUPBY_COLUMNS,
+		  BITOR(d.GROUPBY_PATTERN, s.PATTERN_DEFAULT) GROUPBY_PATTERN,
+		  d.GROUPBY_FLEXIBLE OR (d.GROUPBY_PATTERN = BITOR(d.GROUPBY_PATTERN, s.PATTERN_DEFAULT)) GROUPBY_COMPITABLE,
+		  d.AGGREGATE_COLUMNS,
+		  d.AGGREGATE_FUNCTIONS,
+		  d.DEFAULT_PROCEDURE,
+		  s.SOURCE_TABLE,
+		  s.TRANSFORMATION                
+	  FROM DATA_AGGREGATION_TARGETS d
+	  JOIN DATA_AGGREGATION_SOURCES s
+	  USING(TARGET_TABLE)
+	  WHERE d.TARGET_TABLE = :1
+	  AND s.SOURCE_ENABLED != :2;`;
+		
+	var sourceStmt = snowflake.createStatement({ 
+	  sqlText: sourceQuery,
+	  binds: [TARGET_TABLE, NULL_ENABLED]
+	  });
+	  
+	var sources = sourceStmt.execute();
+
+	// for each source
+	while (sources.next())
+	{
+	  var targetTable = sources.getColumnValue(1);
+	  var batchControlColumn = sources.getColumnValue(2);
+	  var batchControlSize = sources.getColumnValue(3);
+	  var batchControlNext = sources.getColumnValue(4);
+	  var patternColumns = sources.getColumnValue(5);
+	  var groupByColumns = sources.getColumnValue(6).map(x => x.split(':')[1]);
+	  var dimensionColumns = sources.getColumnValue(6).map(x => x.split(':')[0]);
+	  var groupByPattern = sources.getColumnValue(7);
+	  var groupByCompitable = sources.getColumnValue(8);
+	  var aggregateColumns = sources.getColumnValue(9).map(x => x.split(':')[1]);
+	  var measureColumns = sources.getColumnValue(9).map(x => x.split(':')[0]);
+	  var aggregateFunctions = sources.getColumnValue(10);
+	  var defaultProcedure = sources.getColumnValue(11);
+	  var sourceTable = sources.getColumnValue(12);
+	  var transformation = sources.getColumnValue(13);
+	  var sqlExecuted = '';
+	  
+	  if (transformation) {transformation = '(' + transformation + ')'} else {transformation = sourceTable}
+	  
+	  if (groupByCompitable) {
+		var flagIndexLast = patternColumns.length - 1, 
+			patternSegment = groupByPattern;
+		var selectList = groupByColumns[0] === "DATA_PATTERN" ? 'BITOR(' + groupByColumns[0] + ',' + groupByPattern + ') ' : '', 
+			dimensionList = '', 
+			groupByList = '', 
+			columnSplitter = '';
+		for (var i = 0; i <= flagIndexLast; i++) {  
+		  var flagPower = 2 ** (flagIndexLast - i); 
+		  if (patternSegment / flagPower < 1) {
+			dimensionList = dimensionList + columnSplitter + dimensionColumns[groupByColumns.indexOf(patternColumns[i])];
+			selectList = selectList + columnSplitter + patternColumns[i];
+			groupByList = groupByList + columnSplitter + patternColumns[i];
+			columnSplitter = ',';
+		  }
+		  patternSegment %= flagPower;
+		}    
+
+		var targetAlias = 'T.', sourceAlias = 'S.';
+		var loadQuery = `MERGE INTO ` + targetTable + ` ` + targetAlias[0] + ` \n`
+			+ `USING ( \n`
+			+ `  SELECT ` + groupByList + `,` 
+					+ aggregateFunctions.map((x,i)=>{return x.replace('?', aggregateColumns[i]) + ' ' + aggregateColumns[i]}) + ` \n`
+			+ `  FROM ( \n`
+			+ `    SELECT ` + selectList + `,` + aggregateColumns + ` \n`
+			+ `    FROM ` + transformation + ` \n`
+			+ `    WHERE ` + batchControlColumn + ` >= :1 AND ` + batchControlColumn + ` < ` + batchControlNext + ` \n` 
+			+ `    ) \n`
+			+ `  GROUP BY ` + groupByList + `\n`
+			+ `  ) ` + sourceAlias[0] + ` \n`
+			+ `ON ` + dimensionList.split(',').map((x,i)=>{return `COALESCE(TO_CHAR(` + targetAlias + x + `),'') = COALESCE(TO_CHAR(` + sourceAlias + groupByColumns[i] + `),'')`}).join('\n AND ') + ` \n`
+			+ `WHEN MATCHED THEN UPDATE SET ` + measureColumns.map((x,i) =>{return x + ' = ' + sourceAlias[0] + `.` + aggregateColumns[i]}) + ` \n`
+			+ `WHEN NOT MATCHED THEN INSERT(` + dimensionList + `,` + measureColumns + `) \n`
+			+ `VALUES (` + groupByList.split(',').map(x=>{return sourceAlias[0] + `.` +  x}) + `,` 
+						 + aggregateColumns.map(x=>{return sourceAlias[0] + `.` +  x}) + `);`;
+
+
+		var loadStmt = snowflake.createStatement({ 
+			sqlText: loadQuery, 
+			binds: [BATCH_TIMETAG, batchControlSize]
+			});
+
+		if (!SCRIPT_ONLY) {loadStmt.execute();} 
+		
+		sqlExecuted = loadStmt.getSqlText().replace(/:1/g, "'" + BATCH_TIMETAG + "'").replace(/:2/g, batchControlSize);
+	  }
+	  else {
+		sqlExecuted = '-- No data is loaded from this source as a data pattern compatible issue!';
+	  }
+
+	  sourceTitle = `\n\n` + '-'.repeat(65) 
+		+ `\n-- ` + sourceTable.replace('DATAMART.BUYSIDE_NETWORK.','').replace('DATAMART.SELLSIDE_NETWORK.','') 
+		+ `\n` + '-'.repeat(65) + `\n`;
+	  sqlScript = sqlScript + sourceTitle + sqlExecuted;
+	}
+
+	return sqlScript;
+}
+catch (err) {
+	return "Failed: " + err
+}
+$$;
+--
+-- Aggregate generation stored procedues for indivual source
 -- DROP PROCEDURE DATA_AGGREGATOR(STRING, STRING, BOOLEAN);
 --
 ALTER PROCEDURE IF EXISTS DATA_AGGREGATOR(STRING, STRING, BOOLEAN) RENAME TO _BKBY_&{ver}_DATA_AGGREGATOR;
