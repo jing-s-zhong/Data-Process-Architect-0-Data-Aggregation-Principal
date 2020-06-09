@@ -924,7 +924,7 @@ SELECT SYSTEM$TASK_DEPENDENTS_ENABLE('HOURLY_SOURCE_DATA_AVAILABILITY_2');
 
 ## VII. License
 
-(This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details)
+
 
 ## VIII. Acknowledgments
 
