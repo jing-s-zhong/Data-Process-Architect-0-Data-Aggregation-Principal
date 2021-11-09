@@ -97,13 +97,13 @@ Figure-2 Entity Relationship Diagram
 
 As all raw data have been ingested into a snowflake warehouse already, we will implement the processing with snowflake stored procedures and functions. Snowflake supports a simplified JavaScript API, the functions and procedures can be programmed in JavaScript, so that most JavaScript programmers involve the work quickly with a very short time learning.
 
-### A. Single Chunk Process
+### A. Chunk Processor
 
 ![Single chunk processing flowchart](images/figure3-single-chunk-processing.jpg?raw=true "Single chunk processing flowchart")
 
 Figure-3 Flowchart for single chunk processing
 
-### B. Loop The Chunks Process
+### B. Batch Processor
 
 ![Loop multi-chunks processing](images/figure4-loop-multi-chunks-processing.jpg?raw=true "Loop multi-chunks processing flowchart")
 
