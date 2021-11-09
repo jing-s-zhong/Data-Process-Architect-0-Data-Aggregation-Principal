@@ -95,7 +95,7 @@ Figure-2 Entity Relationship Diagram
 
 ## III. Code Implementation
 
-As all raw data have been ingested into a snowflake warehouse stage area already, we will implement the processing with snowflake stored procedures and functions. Snowflake supports a simplified JavaScript API, the functions and procedures can be programmed in JavaScript, so that most JavaScript programmers involve the work quickly with a very short time learning.
+As all raw data have been ingested into a snowflake warehouse stage area already, we will implement the processing with snowflake stored procedures and functions. Snowflake supports a simplified JavaScript API, the functions and procedures can be programmed in JavaScript, so that most JavaScript programmers are able to involve the development/maintenance very quick with a short period of learning.
 
 ### A. Chunk Processor
 
