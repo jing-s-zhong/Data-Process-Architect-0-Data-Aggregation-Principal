@@ -34,7 +34,6 @@ Aggregate_Columns | Property | The column list which will aggregate values
 Aggregate_Functions | Property | The function list applied to aggregate columns
 
 
-
 Table-2 Source data entity and attributes
 Attritue | Type | Description
 ------------------------|----------------|-------------------------------------------------
