@@ -1,4 +1,4 @@
-# Data Process Architecture (0): Data Synchronization
+# Data Process Architecture (1): Data Synchronization
 
 Data aggregation is a common data processing method, which is widely used in data analysis, business intelligence and machine learning projects. It is quite often that we need to aggregate the data from many data sources in a very different format, and the data format may change from time to time. It could be a challenge to program a data processing application to handle the varieties of this case. Here we introduce an automation solution that solves the case where all the source data are continuously being loaded into a series of database tables with the different table schemas.
 
